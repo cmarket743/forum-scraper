@@ -2,6 +2,8 @@ import time
 import datetime
 import requests
 import pandas as pd
+import os
+import json
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -49,9 +51,12 @@ def fetch_reddit_posts(keyword, after_timestamp):
 # === MUMSNET SCRAPER ===
 def fetch_mumsnet_posts():
     options = Options()
-    options.add_argument("--disable-gpu")
-    options.add_argument("--headless")
+    options.add_argument("--headless=new")  # new headless mode for GitHub Actions
     options.add_argument("--no-sandbox")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1920,1080")
+
     driver = webdriver.Chrome(options=options)
 
     for keyword in KEYWORDS:
@@ -72,12 +77,12 @@ def fetch_mumsnet_posts():
                 try:
                     link_el = art.find_element(By.CSS_SELECTOR, "a.text-lg.font-bold")
                     title = link_el.text.strip()
-                    url = link_el.get_attribute("href").strip()
+                    link_url = link_el.get_attribute("href").strip()
 
                     RESULTS.append({
                         "date": "",  # Mumsnet doesn't show exact timestamp
                         "title": title,
-                        "url": url,
+                        "url": link_url,
                         "forum": "Mumsnet",
                         "matched_keyword": keyword,
                         "script_run_date": RUN_DATE
@@ -92,7 +97,10 @@ def fetch_mumsnet_posts():
 def save_to_google_sheet(results):
     print("📤 Uploading to Google Sheets...")
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+
+    # Load credentials from GitHub Actions secret
+    creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
 
     spreadsheet_url = "https://docs.google.com/spreadsheets/d/16OtDpKLeXUPzFM_OQerVOQrVaD6XJQ7o8DrSU0bTuGk/edit#gid=0"
