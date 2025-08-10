@@ -51,4 +51,4 @@ jobs:
 
       # Run your scraper
       - name: Run scraper
-        run: python your_scraper.py
+        run: python scraper.py
