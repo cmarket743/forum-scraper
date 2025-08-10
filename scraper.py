@@ -2,23 +2,12 @@ import time
 import datetime
 import requests
 import pandas as pd
-import os
-import json
-import logging
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from urllib.parse import quote_plus
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-
-# === LOGGER SETUP ===
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
-logger = logging.getLogger(__name__)
 
 # === CONFIGURATION ===
 KEYWORDS = [
@@ -39,7 +28,6 @@ def get_unix_time_24hrs_ago():
 def fetch_reddit_posts(keyword, after_timestamp):
     url = f"https://www.reddit.com/search.json?q={quote_plus(keyword)}&sort=new&limit=100&restrict_sr=0&t=day"
     try:
-        logger.info(f"[Reddit] Searching: {keyword}")
         response = requests.get(url, headers=HEADERS)
         if response.status_code == 200:
             data = response.json()
@@ -55,26 +43,19 @@ def fetch_reddit_posts(keyword, after_timestamp):
                         "matched_keyword": keyword,
                         "script_run_date": RUN_DATE
                     })
-            logger.info(f"[Reddit] Found {len(RESULTS)} total results so far.")
-        else:
-            logger.warning(f"[Reddit] HTTP {response.status_code} for '{keyword}'")
     except Exception as e:
-        logger.error(f"[Reddit] Error for '{keyword}': {e}", exc_info=True)
+        print(f"[Reddit] Error for '{keyword}': {e}")
 
 # === MUMSNET SCRAPER ===
 def fetch_mumsnet_posts():
-    logger.info("[Mumsnet] Starting search...")
     options = Options()
-    options.add_argument("--headless=new")  # new headless mode for CI
-    options.add_argument("--no-sandbox")
     options.add_argument("--disable-gpu")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
     driver = webdriver.Chrome(options=options)
 
     for keyword in KEYWORDS:
-        logger.info(f"[Mumsnet] Searching: {keyword}")
+        print(f"[Mumsnet] Searching: {keyword}")
         encoded_keyword = quote_plus(keyword)
         page = 1
 
@@ -85,38 +66,33 @@ def fetch_mumsnet_posts():
 
             articles = driver.find_elements(By.CSS_SELECTOR, "article.search-result")
             if not articles:
-                logger.info(f"[Mumsnet] No more results for '{keyword}' on page {page}")
                 break
 
             for art in articles:
                 try:
                     link_el = art.find_element(By.CSS_SELECTOR, "a.text-lg.font-bold")
                     title = link_el.text.strip()
-                    link_url = link_el.get_attribute("href").strip()
+                    url = link_el.get_attribute("href").strip()
 
                     RESULTS.append({
-                        "date": "",
+                        "date": "",  # Mumsnet doesn't show exact timestamp
                         "title": title,
-                        "url": link_url,
+                        "url": url,
                         "forum": "Mumsnet",
                         "matched_keyword": keyword,
                         "script_run_date": RUN_DATE
                     })
-                except Exception as e:
-                    logger.debug(f"[Mumsnet] Skipping an article: {e}")
-            logger.info(f"[Mumsnet] Completed page {page} for '{keyword}'")
+                except Exception:
+                    continue
             page += 1
 
     driver.quit()
-    logger.info(f"[Mumsnet] Finished. Total results so far: {len(RESULTS)}")
 
 # === SAVE TO GOOGLE SHEET ===
 def save_to_google_sheet(results):
-    logger.info("📤 Uploading to Google Sheets...")
+    print("📤 Uploading to Google Sheets...")
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-
-    creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
     client = gspread.authorize(creds)
 
     spreadsheet_url = "https://docs.google.com/spreadsheets/d/16OtDpKLeXUPzFM_OQerVOQrVaD6XJQ7o8DrSU0bTuGk/edit#gid=0"
@@ -125,23 +101,26 @@ def save_to_google_sheet(results):
     try:
         sheet = spreadsheet.worksheet("forum scraper")
     except gspread.exceptions.WorksheetNotFound:
-        logger.warning("Worksheet not found, creating new one...")
         sheet = spreadsheet.add_worksheet(title="forum scraper", rows="100", cols="20")
 
     sheet.clear()
 
+    # Define headers
     headers = ["date", "title", "url", "forum", "matched_keyword", "script_run_date"]
     data = [headers]
 
+    # Prepare all rows for bulk update
     for row in results:
         data.append([row.get(col, "") for col in headers])
 
+    # Write all at once (bulk write)
     sheet.update(f"A1:F{len(data)}", data)
-    logger.info(f"✅ Uploaded {len(results)} rows to Google Sheets.")
+
+    print(f"✅ Uploaded {len(results)} rows to 'forum scraper' tab.")
 
 # === MAIN RUNNER ===
 def run_scraper():
-    logger.info("🚀 Starting scraper...")
+    print("🚀 Starting scraper...")
     since = get_unix_time_24hrs_ago()
 
     for keyword in KEYWORDS:
@@ -153,7 +132,7 @@ def run_scraper():
     if RESULTS:
         save_to_google_sheet(RESULTS)
     else:
-        logger.warning("⚠️ No results found.")
+        print("⚠️ No results found.")
 
 if __name__ == "__main__":
     run_scraper()
