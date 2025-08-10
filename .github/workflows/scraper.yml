@@ -49,6 +49,8 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      # Run your scraper
+      # Run scraper with Google Sheets credentials from secrets
       - name: Run scraper
+        env:
+          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
         run: python scraper.py
