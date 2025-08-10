@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Install Chrome
+      # Install Google Chrome
       - name: Install Google Chrome
         run: |
           sudo apt-get update
@@ -39,7 +39,7 @@ jobs:
           google-chrome --version
           chromedriver --version
 
-      # Install Python dependencies
+      # Install Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -47,10 +47,14 @@ jobs:
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Run scraper with Google Sheets credentials from secrets
+      # Create credentials.json from secret
+      - name: Save Google Sheets credentials
+        run: |
+          echo "${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}" > credentials.json
+
+      # Run scraper
       - name: Run scraper
-        env:
-          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
         run: python scraper.py
