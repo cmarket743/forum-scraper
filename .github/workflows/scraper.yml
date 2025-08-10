@@ -1,13 +1,14 @@
-name: Run Forum Scrapers
+name: Run Forum Scraper
 
 on:
   schedule:
-    - cron: "0 10 * * *" # Runs every day at 10:00 UTC (adjust for UK DST if needed)
-  workflow_dispatch: # Allow manual runs
+    - cron: "0 9 * * *" # 09:00 UTC = 10:00 UK time in summer
+  workflow_dispatch:
 
 jobs:
   run-scraper:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,11 +22,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
+          google-chrome --version
 
-      - name: Install ChromeDriver
-        uses: nanasess/setup-chromedriver@v2
-        with:
-          chromedriver-version: "latest"
+      - name: Install matching ChromeDriver
+        run: |
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
+          wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
+          unzip chromedriver_linux64.zip
+          sudo mv chromedriver /usr/local/bin/
+          chromedriver --version
 
       - name: Install dependencies
         run: pip install -r requirements.txt
