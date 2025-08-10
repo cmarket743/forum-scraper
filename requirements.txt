@@ -1,0 +1,5 @@
+selenium==4.15.2
+requests
+pandas
+gspread
+oauth2client
