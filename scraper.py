@@ -29,7 +29,8 @@ with open("google-credentials.json", "w") as f:
 
 creds = ServiceAccountCredentials.from_json_keyfile_name("google-credentials.json", scope)
 client = gspread.authorize(creds)
-sheet = client.open("ForumScraper").sheet1
+sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/16OtDpKLeXUPzFM_OQerVOQrVaD6XJQ7o8DrSU0bTuGk/edit").sheet1
+
 
 # Reddit API setup
 reddit = praw.Reddit(
