@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+      REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+      REDDIT_SECRET: ${{ secrets.REDDIT_SECRET }}
+      REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
 
     steps:
       - name: Checkout repository

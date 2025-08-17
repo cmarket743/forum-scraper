@@ -1,6 +1,5 @@
 import time
 import datetime
-import requests
 import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -9,6 +8,7 @@ from urllib.parse import quote_plus
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
+import praw   # ✅ Reddit API library
 
 # === CONFIGURATION ===
 KEYWORDS = [
@@ -26,7 +26,7 @@ GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/16OtDpKLeXUPzFM_OQerV
 def setup_google_sheets():
     creds_json = os.environ.get("GOOGLE_SHEETS_CREDENTIALS")
     if not creds_json:
-        raise ValueError("❌ GOOGLE_SHEETS_CREDS not found in environment variables!")
+        raise ValueError("❌ GOOGLE_SHEETS_CREDENTIALS not found in environment variables!")
 
     import json
     creds_dict = json.loads(creds_json)
@@ -36,38 +36,26 @@ def setup_google_sheets():
     client = gspread.authorize(creds)
     return client.open_by_url(GOOGLE_SHEET_URL).sheet1
 
-# === REDDIT SCRAPER ===
+# === REDDIT SCRAPER (API) ===
 def scrape_reddit():
-    print("🔍 Scraping Reddit...")
+    print("🔍 Scraping Reddit API...")
     results = []
-    base_url = "https://www.reddit.com/search/?q={}&t=day"
-    headers = {"User-Agent": "Mozilla/5.0"}
+
+    reddit = praw.Reddit(
+        client_id=os.environ["REDDIT_CLIENT_ID"],
+        client_secret=os.environ["REDDIT_SECRET"],
+        user_agent=os.environ.get("REDDIT_USER_AGENT", "forum-scraper")
+    )
 
     for keyword in KEYWORDS:
-        url = base_url.format(quote_plus(keyword))
         try:
-            r = requests.get(url, headers=headers)
-            if r.status_code != 200:
-                print(f"⚠ Reddit request failed for '{keyword}' ({r.status_code})")
-                continue
-
-            if keyword.lower() not in r.text.lower():
-                continue
-
-            # Store only first 10 matches
-            count = 0
-            for line in r.text.split('"'):
-                if "/comments/" in line and count < 10:
-                    link = "https://www.reddit.com" + line
-                    if link not in [x['URL'] for x in results]:
-                        results.append({
-                            "Date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "Forum": "Reddit",
-                            "Keyword": keyword,
-                            "URL": link
-                        })
-                        count += 1
-
+            for submission in reddit.subreddit("all").search(keyword, sort="new", time_filter="day", limit=10):
+                results.append({
+                    "Date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "Forum": "Reddit",
+                    "Keyword": keyword,
+                    "URL": f"https://www.reddit.com{submission.permalink}"
+                })
         except Exception as e:
             print(f"❌ Error scraping Reddit for '{keyword}': {e}")
 
