@@ -8,7 +8,7 @@ from urllib.parse import quote_plus
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
-import praw   # ✅ Reddit API library
+# import praw   # ✅ Reddit API library
 
 # === CONFIGURATION ===
 KEYWORDS = [
@@ -37,29 +37,29 @@ def setup_google_sheets():
     return client.open_by_url(GOOGLE_SHEET_URL).sheet1
 
 # === REDDIT SCRAPER (API) ===
-def scrape_reddit():
-    print("🔍 Scraping Reddit API...")
-    results = []
+# def scrape_reddit():
+#     print("🔍 Scraping Reddit API...")
+#     results = []
 
-    reddit = praw.Reddit(
-        client_id=os.environ["REDDIT_CLIENT_ID"],
-        client_secret=os.environ["REDDIT_SECRET"],
-        user_agent=os.environ.get("REDDIT_USER_AGENT", "forum-scraper")
-    )
+#     reddit = praw.Reddit(
+#         client_id=os.environ["REDDIT_CLIENT_ID"],
+#         client_secret=os.environ["REDDIT_SECRET"],
+#         user_agent=os.environ.get("REDDIT_USER_AGENT", "forum-scraper")
+#     )
 
-    for keyword in KEYWORDS:
-        try:
-            for submission in reddit.subreddit("all").search(keyword, sort="new", time_filter="day", limit=10):
-                results.append({
-                    "Date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Forum": "Reddit",
-                    "Keyword": keyword,
-                    "URL": f"https://www.reddit.com{submission.permalink}"
-                })
-        except Exception as e:
-            print(f"❌ Error scraping Reddit for '{keyword}': {e}")
+#     for keyword in KEYWORDS:
+#         try:
+#             for submission in reddit.subreddit("all").search(keyword, sort="new", time_filter="day", limit=10):
+#                 results.append({
+#                     "Date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+#                     "Forum": "Reddit",
+#                     "Keyword": keyword,
+#                     "URL": f"https://www.reddit.com{submission.permalink}"
+#                 })
+#         except Exception as e:
+#             print(f"❌ Error scraping Reddit for '{keyword}': {e}")
 
-    return results
+#     return results
 
 # === MUMSNET SCRAPER ===
 def scrape_mumsnet():
@@ -103,10 +103,10 @@ def run_scraper():
     sheet = setup_google_sheets()
     all_results = []
 
-    reddit_results = scrape_reddit()
+    # reddit_results = scrape_reddit()
     mumsnet_results = scrape_mumsnet()
 
-    all_results.extend(reddit_results)
+    # all_results.extend(reddit_results)
     all_results.extend(mumsnet_results)
 
     if not all_results:
