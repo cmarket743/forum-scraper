@@ -1,4 +1,4 @@
-name: Forum Scraper CI
+name: Scraper CI
 
 on:
   push:
