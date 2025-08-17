@@ -1,15 +1,13 @@
+import os
 import time
 import datetime
+import praw
+import requests
 import pandas as pd
-import logging
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
+from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import os
-import praw   # ✅ Reddit API library
 
 # === CONFIGURATION ===
 KEYWORDS = [
@@ -20,118 +18,91 @@ KEYWORDS = [
     "sending pension lump sum overseas"
 ]
 
-GOOGLE_SHEET_NAME = "forum scraper"
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/16OtDpKLeXUPzFM_OQerVOQrVaD6XJQ7o8DrSU0bTuGk/edit?gid=1484600113#gid=1484600113"
+# Google Sheets setup
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds_json = os.environ.get("GOOGLE_SHEETS_CREDENTIALS")
+if not creds_json:
+    raise Exception("❌ GOOGLE_SHEETS_CREDENTIALS not set")
 
-# === LOGGING CONFIG ===
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+with open("google-credentials.json", "w") as f:
+    f.write(creds_json)
+
+creds = ServiceAccountCredentials.from_json_keyfile_name("google-credentials.json", scope)
+client = gspread.authorize(creds)
+sheet = client.open("ForumScraper").sheet1
+
+# Reddit API setup
+reddit = praw.Reddit(
+    client_id=os.environ.get("REDDIT_CLIENT_ID"),
+    client_secret=os.environ.get("REDDIT_SECRET"),
+    user_agent=os.environ.get("REDDIT_USER_AGENT"),
 )
 
-# === GOOGLE SHEETS SETUP ===
-def setup_google_sheets():
-    creds_json = os.environ.get("GOOGLE_SHEETS_CREDENTIALS")
-    if not creds_json:
-        raise ValueError("❌ GOOGLE_SHEETS_CREDENTIALS not found in environment variables!")
+RESULTS = []
 
-    import json
-    creds_dict = json.loads(creds_json)
+# === SCRAPERS ===
 
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
-    logging.info("✅ Connected to Google Sheets")
-    return client.open_by_url(GOOGLE_SHEET_URL).sheet1
+def scrape_reddit(keyword):
+    print(f"🔍 Scraping Reddit for '{keyword}'...")
+    try:
+        for submission in reddit.subreddit("all").search(keyword, limit=10):
+            RESULTS.append({
+                "date": datetime.datetime.utcnow().isoformat(),
+                "forum": "Reddit",
+                "keyword": keyword,
+                "title": submission.title,
+                "url": f"https://reddit.com{submission.permalink}"
+            })
+    except Exception as e:
+        print(f"❌ Error scraping Reddit for '{keyword}': {e}")
 
-# === REDDIT SCRAPER (API) ===
-def scrape_reddit():
-    logging.info("🔍 Scraping Reddit API...")
-    results = []
 
-    reddit = praw.Reddit(
-        client_id=os.environ["REDDIT_CLIENT_ID"],
-        client_secret=os.environ["REDDIT_SECRET"],
-        user_agent=os.environ.get("REDDIT_USER_AGENT", "forum-scraper")
-    )
-
-    for keyword in KEYWORDS:
-        logging.info(f"➡ Searching Reddit for: {keyword}")
-        try:
-            for submission in reddit.subreddit("all").search(keyword, sort="new", time_filter="day", limit=10):
-                results.append({
-                    "Date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Forum": "Reddit",
-                    "Keyword": keyword,
-                    "URL": f"https://www.reddit.com{submission.permalink}"
-                })
-            logging.info(f"✅ Found {len(results)} results so far from Reddit")
-        except Exception as e:
-            logging.error(f"❌ Error scraping Reddit for '{keyword}': {e}")
-
-    return results
-
-# === MUMSNET SCRAPER ===
-def scrape_mumsnet():
-    logging.info("🔍 Scraping Mumsnet...")
-    results = []
-
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    driver = webdriver.Chrome(options=chrome_options)
-
-    for keyword in KEYWORDS:
+def scrape_mumsnet(keyword):
+    print(f"🔍 Scraping Mumsnet for '{keyword}'...")
+    try:
         search_url = f"https://www.mumsnet.com/search?q={quote_plus(keyword)}"
-        logging.info(f"➡ Searching Mumsnet for: {keyword}")
-        try:
-            driver.set_page_load_timeout(30)
-            driver.get(search_url)
-            time.sleep(4)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(search_url, headers=headers, timeout=20)
 
-            posts = driver.find_elements(By.CSS_SELECTOR, ".search-results__post-title a")
-            count = 0
-            for post in posts:
-                if count >= 10:
-                    break
-                link = post.get_attribute("href")
-                results.append({
-                    "Date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Forum": "Mumsnet",
-                    "Keyword": keyword,
-                    "URL": link
-                })
-                count += 1
+        if resp.status_code != 200:
+            print(f"❌ Mumsnet request failed ({resp.status_code}) for '{keyword}'")
+            return
 
-            logging.info(f"✅ Found {count} results for '{keyword}' on Mumsnet")
+        soup = BeautifulSoup(resp.text, "html.parser")
+        posts = soup.select(".search-results__post-title a")
 
-        except Exception as e:
-            logging.error(f"❌ Error scraping Mumsnet for '{keyword}': {e}")
+        for post in posts[:10]:  # only first 10 URLs
+            RESULTS.append({
+                "date": datetime.datetime.utcnow().isoformat(),
+                "forum": "Mumsnet",
+                "keyword": keyword,
+                "title": post.get_text(strip=True),
+                "url": "https://www.mumsnet.com" + post.get("href")
+            })
 
-    driver.quit()
-    return results
+    except Exception as e:
+        print(f"❌ Error scraping Mumsnet for '{keyword}': {e}")
 
-# === MAIN SCRIPT ===
-def run_scraper():
-    sheet = setup_google_sheets()
-    all_results = []
 
-    reddit_results = scrape_reddit()
-    mumsnet_results = scrape_mumsnet()
-
-    all_results.extend(reddit_results)
-    all_results.extend(mumsnet_results)
-
-    if not all_results:
-        logging.warning("⚠ No results found.")
+# === SAVE RESULTS ===
+def save_to_google_sheet(data):
+    if not data:
+        print("⚠️ No data to save")
         return
+    df = pd.DataFrame(data)
+    sheet.append_rows(df.values.tolist(), value_input_option="RAW")
+    print(f"✅ Saved {len(data)} rows to Google Sheets")
 
-    df = pd.DataFrame(all_results)
-    rows = df.values.tolist()
-    sheet.append_rows(rows)
-    logging.info(f"✅ Added {len(rows)} rows to Google Sheet.")
+
+# === MAIN ===
+def run_scraper():
+    for keyword in KEYWORDS:
+        scrape_reddit(keyword)
+        scrape_mumsnet(keyword)
+        time.sleep(2)
+
+    save_to_google_sheet(RESULTS)
+
 
 if __name__ == "__main__":
     run_scraper()
