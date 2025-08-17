@@ -20,7 +20,7 @@ KEYWORDS = [
 ]
 
 GOOGLE_SHEET_NAME = "forum scraper"
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/16OtDpKLeXUPzFM_OQerVOQrVaD6XJQ7o8DrSU0bTuG"
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/16OtDpKLeXUPzFM_OQerVOQrVaD6XJQ7o8DrSU0bTuGk/edit?gid=1484600113#gid=1484600113"
 
 # === GOOGLE SHEETS SETUP ===
 def setup_google_sheets():
