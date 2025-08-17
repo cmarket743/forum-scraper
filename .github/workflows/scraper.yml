@@ -54,6 +54,7 @@ jobs:
       - name: Save Google Sheets credentials
         env:
           GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+        run: echo "Credentials loaded into env var"
 
       # Run scraper
       - name: Run scraper
